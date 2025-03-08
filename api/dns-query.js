@@ -2,7 +2,6 @@ const fetch = require('node-fetch');
 
 const UPSTREAM_DOH_SERVER = 'https://cloudflare-dns.com/dns-query';
 
-// 日志函数
 const logError = (req, error, stage) => {
   console.error(JSON.stringify({
     timestamp: new Date().toISOString(),
@@ -11,14 +10,12 @@ const logError = (req, error, stage) => {
     method: req.method,
     headers: req.headers,
     query: req.query,
-    body: req.body,
     url: req.url
   }, null, 2));
 };
 
 module.exports = async (req, res) => {
   try {
-    // 记录每个请求的基本信息
     console.log(JSON.stringify({
       timestamp: new Date().toISOString(),
       method: req.method,
@@ -86,28 +83,34 @@ module.exports = async (req, res) => {
     }
 
     // 处理 application/dns-message 格式的请求
-    let dnsQuery;
-    if (req.method === 'GET') {
-      if (!req.query.dns) {
-        logError(req, 'Missing dns parameter', 'dns_message_validation');
-        return res.status(400).json({ 
-          error: 'Bad Request',
-          detail: 'Missing dns parameter for binary DNS query'
-        });
-      }
-      dnsQuery = req.query.dns;
-    } else {
-      if (!req.body) {
-        logError(req, 'Missing request body', 'dns_message_validation');
-        return res.status(400).json({ 
-          error: 'Bad Request',
-          detail: 'Missing request body for POST request'
-        });
-      }
-      dnsQuery = req.body;
-    }
-
     try {
+      let dnsQuery;
+      if (req.method === 'GET') {
+        if (!req.query.dns) {
+          logError(req, 'Missing dns parameter', 'dns_message_validation');
+          return res.status(400).json({ 
+            error: 'Bad Request',
+            detail: 'Missing dns parameter for binary DNS query'
+          });
+        }
+        dnsQuery = req.query.dns;
+      } else {
+        // 处理 POST 请求的原始数据
+        const chunks = [];
+        for await (const chunk of req) {
+          chunks.push(chunk);
+        }
+        dnsQuery = Buffer.concat(chunks);
+        
+        if (!dnsQuery.length) {
+          logError(req, 'Empty request body', 'dns_message_validation');
+          return res.status(400).json({ 
+            error: 'Bad Request',
+            detail: 'Empty request body'
+          });
+        }
+      }
+
       const upstream_response = await fetch(UPSTREAM_DOH_SERVER, {
         method: req.method,
         headers: {
@@ -115,14 +118,9 @@ module.exports = async (req, res) => {
           'Content-Type': 'application/dns-message'
         },
         ...(req.method === 'GET' ? {
-          url: `${UPSTREAM_DOH_SERVER}?dns=${dnsQuery}`,
-          headers: { 'Accept': 'application/dns-message' }
+          url: `${UPSTREAM_DOH_SERVER}?dns=${dnsQuery}`
         } : {
-          body: dnsQuery,
-          headers: {
-            'Content-Type': 'application/dns-message',
-            'Accept': 'application/dns-message'
-          }
+          body: dnsQuery
         })
       });
 
