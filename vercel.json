@@ -4,6 +4,10 @@
     {
       "src": "/dns-query",
       "dest": "/api/dns-query.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/public/$1"
     }
   ]
 }
