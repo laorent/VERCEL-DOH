@@ -1,87 +1,82 @@
 const fetch = require('node-fetch');
 
-// 上游 DOH 服务器，这里使用 Cloudflare 的 DOH 服务器
 const UPSTREAM_DOH_SERVER = 'https://cloudflare-dns.com/dns-query';
 
 module.exports = async (req, res) => {
-  // 设置 CORS 头
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept');
 
-  // 处理 OPTIONS 请求
   if (req.method === 'OPTIONS') {
     res.status(204).end();
     return;
   }
 
-  // 检查请求方法
   if (req.method !== 'GET' && req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
     return;
   }
 
   try {
-    let dnsQuery;
-    let contentType;
+    const accept = req.headers.accept || 'application/dns-message';
+    const isJsonFormat = accept.includes('application/dns-json');
 
+    // 处理 application/dns-json 格式的请求
+    if (isJsonFormat) {
+      const { name, type } = req.query;
+      if (!name) {
+        res.status(400).json({ error: 'Missing name parameter' });
+        return;
+      }
+
+      const upstream_url = `${UPSTREAM_DOH_SERVER}?name=${encodeURIComponent(name)}&type=${type || 'A'}`;
+      const upstream_response = await fetch(upstream_url, {
+        headers: {
+          'Accept': 'application/dns-json'
+        }
+      });
+
+      const response_data = await upstream_response.json();
+      res.setHeader('Content-Type', 'application/dns-json');
+      res.setHeader('Cache-Control', 'public, max-age=60');
+      return res.json(response_data);
+    }
+
+    // 处理 application/dns-message 格式的请求
+    let dnsQuery;
     if (req.method === 'GET') {
-      // GET 请求必须包含 dns 参数
       if (!req.query.dns) {
         res.status(400).json({ error: 'Missing dns parameter' });
         return;
       }
       dnsQuery = req.query.dns;
-      contentType = req.headers.accept;
     } else {
-      // POST 请求从 body 中获取数据
       dnsQuery = req.body;
-      contentType = req.headers['content-type'];
     }
 
-    // 验证 Content-Type
-    if (!contentType || 
-        !(contentType.includes('application/dns-message') || 
-          contentType.includes('application/dns-json'))) {
-      res.status(415).json({ error: 'Unsupported Media Type' });
-      return;
-    }
-
-    // 转发请求到上游 DOH 服务器
     const upstream_response = await fetch(UPSTREAM_DOH_SERVER, {
       method: req.method,
       headers: {
-        'Accept': contentType,
-        'Content-Type': contentType
+        'Accept': 'application/dns-message',
+        'Content-Type': 'application/dns-message'
       },
       ...(req.method === 'GET' ? {
-        headers: { 'Accept': contentType }
+        headers: { 'Accept': 'application/dns-message' }
       } : {
         body: dnsQuery,
         headers: {
-          'Content-Type': contentType,
-          'Accept': contentType
+          'Content-Type': 'application/dns-message',
+          'Accept': 'application/dns-message'
         }
       })
     });
 
-    // 获取响应数据
-    const response_data = await (contentType.includes('application/dns-json') 
-      ? upstream_response.json() 
-      : upstream_response.buffer());
-
-    // 设置响应头
-    res.setHeader('Content-Type', contentType);
+    const response_data = await upstream_response.buffer();
+    res.setHeader('Content-Type', 'application/dns-message');
     res.setHeader('Cache-Control', 'public, max-age=60');
-
-    // 发送响应
     res.status(upstream_response.status);
-    
-    if (contentType.includes('application/dns-json')) {
-      res.json(response_data);
-    } else {
-      res.send(response_data);
-    }
+    res.send(response_data);
+
   } catch (error) {
     console.error('Error:', error);
     res.status(500).json({ error: 'Internal Server Error' });
