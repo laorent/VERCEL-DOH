@@ -1,193 +1,77 @@
 const fetch = require('node-fetch');
-const { performance } = require('perf_hooks');
 
-const CONFIG = {
-  UPSTREAM_DOH_SERVER: 'https://cloudflare-dns.com/dns-query',
-  CACHE_TTL: 60,
-  MAX_CACHE_SIZE: 1000,
-};
+const UPSTREAM_DOH = 'https://cloudflare-dns.com/dns-query';
 
-class DNSCache {
-  constructor(maxSize = CONFIG.MAX_CACHE_SIZE) {
-    this.cache = new Map();
-    this.maxSize = maxSize;
-  }
-
-  get(key) {
-    const item = this.cache.get(key);
-    if (!item) return null;
-    if (Date.now() > item.expiry) {
-      this.cache.delete(key);
-      return null;
-    }
-    return item.data;
-  }
-
-  set(key, value, ttl) {
-    if (this.cache.size >= this.maxSize) {
-      const firstKey = this.cache.keys().next().value;
-      this.cache.delete(firstKey);
-    }
-    this.cache.set(key, {
-      data: value,
-      expiry: Date.now() + ttl * 1000
-    });
-  }
-}
-
-const cache = new DNSCache();
-
-const logger = {
-  info: (message, data = {}) => {
-    console.log(JSON.stringify({
-      timestamp: new Date().toISOString(),
-      level: 'INFO',
-      message,
-      ...data
-    }));
-  },
-  error: (message, error, data = {}) => {
-    console.error(JSON.stringify({
-      timestamp: new Date().toISOString(),
-      level: 'ERROR',
-      message,
-      error: error.message || error,
-      stack: error.stack,
-      ...data
-    }));
-  }
-};
+const log = (level, message, data = {}) => console.log(JSON.stringify({
+  timestamp: new Date().toISOString(),
+  level,
+  message,
+  ...data
+}));
 
 module.exports = async (req, res) => {
-  const startTime = performance.now();
+  const startTime = Date.now();
 
   try {
-    // CORS headers - 增加更多允许的头
+    // 基本 CORS 和响应头设置
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept, Content-Length');
-    res.setHeader('Access-Control-Max-Age', '86400');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept');
 
-    if (req.method === 'OPTIONS') {
-      res.status(204).end();
-      return;
-    }
-
-    // 记录请求信息
-    logger.info('Incoming request', {
-      method: req.method,
-      url: req.url,
-      headers: {
-        accept: req.headers.accept,
-        'content-type': req.headers['content-type']
-      }
-    });
-
+    if (req.method === 'OPTIONS') return res.status(204).end();
     if (req.method !== 'GET' && req.method !== 'POST') {
-      throw new Error(`Method ${req.method} not allowed`);
+      return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const contentType = req.headers['content-type'] || '';
+    // 获取请求信息
     const accept = req.headers.accept || 'application/dns-message';
+    const isJson = accept.includes('application/dns-json');
 
     // 处理 POST 请求
     if (req.method === 'POST') {
-      let body = [];
-      for await (const chunk of req) {
-        body.push(chunk);
-      }
-      body = Buffer.concat(body);
-
-      if (!body.length) {
-        logger.error('Empty POST body');
-        res.status(400).json({ error: 'Empty request body' });
-        return;
-      }
-
-      const upstream_response = await fetch(CONFIG.UPSTREAM_DOH_SERVER, {
+      const body = [];
+      for await (const chunk of req) body.push(chunk);
+      
+      const response = await fetch(UPSTREAM_DOH, {
         method: 'POST',
         headers: {
           'Accept': accept,
-          'Content-Type': contentType || 'application/dns-message'
+          'Content-Type': req.headers['content-type'] || 'application/dns-message'
         },
-        body: body
+        body: Buffer.concat(body)
       });
 
-      if (!upstream_response.ok) {
-        throw new Error(`Upstream server returned ${upstream_response.status}`);
-      }
-
-      const response_data = await upstream_response.buffer();
-
+      const data = await response.buffer();
       res.setHeader('Content-Type', accept);
-      res.setHeader('Cache-Control', `public, max-age=${CONFIG.CACHE_TTL}`);
-      res.send(response_data);
-
-      logger.info('Request completed', {
-        method: 'POST',
-        url: req.url,
-        duration: `${(performance.now() - startTime).toFixed(2)}ms`,
-        status: upstream_response.status
-      });
-      return;
+      res.send(data);
     }
-
     // 处理 GET 请求
-    if (req.method === 'GET') {
-      if (accept.includes('application/dns-json')) {
-        const { name, type } = req.query;
-        if (!name) {
-          throw new Error('Missing name parameter');
-        }
+    else {
+      const params = isJson 
+        ? `name=${encodeURIComponent(req.query.name)}&type=${req.query.type || 'A'}`
+        : `dns=${req.query.dns}`;
 
-        const upstream_url = `${CONFIG.UPSTREAM_DOH_SERVER}?name=${encodeURIComponent(name)}&type=${type || 'A'}`;
-        const upstream_response = await fetch(upstream_url, {
-          headers: { 'Accept': 'application/dns-json' }
-        });
-
-        if (!upstream_response.ok) {
-          throw new Error(`Upstream server returned ${upstream_response.status}`);
-        }
-
-        const response_data = await upstream_response.json();
-        res.setHeader('Content-Type', 'application/dns-json');
-        res.setHeader('Cache-Control', `public, max-age=${CONFIG.CACHE_TTL}`);
-        res.json(response_data);
-      } else {
-        if (!req.query.dns) {
-          throw new Error('Missing dns parameter');
-        }
-
-        const upstream_url = `${CONFIG.UPSTREAM_DOH_SERVER}?dns=${req.query.dns}`;
-        const upstream_response = await fetch(upstream_url, {
-          headers: { 'Accept': 'application/dns-message' }
-        });
-
-        if (!upstream_response.ok) {
-          throw new Error(`Upstream server returned ${upstream_response.status}`);
-        }
-
-        const response_data = await upstream_response.buffer();
-        res.setHeader('Content-Type', 'application/dns-message');
-        res.setHeader('Cache-Control', `public, max-age=${CONFIG.CACHE_TTL}`);
-        res.send(response_data);
+      if (!req.query.name && !req.query.dns) {
+        return res.status(400).json({ error: 'Missing required parameters' });
       }
 
-      logger.info('Request completed', {
-        method: 'GET',
-        url: req.url,
-        duration: `${(performance.now() - startTime).toFixed(2)}ms`
+      const response = await fetch(`${UPSTREAM_DOH}?${params}`, {
+        headers: { 'Accept': accept }
       });
-      return;
+
+      const data = await (isJson ? response.json() : response.buffer());
+      res.setHeader('Content-Type', accept);
+      isJson ? res.json(data) : res.send(data);
     }
-  } catch (error) {
-    logger.error('Request failed', error, {
+
+    // 简单的性能日志
+    log('INFO', 'Request completed', {
       method: req.method,
-      url: req.url
+      duration: `${Date.now() - startTime}ms`
     });
-    res.status(500).json({
-      error: 'Internal Server Error',
-      message: error.message
-    });
+
+  } catch (error) {
+    log('ERROR', error.message, { method: req.method });
+    res.status(500).json({ error: 'Internal server error' });
   }
 };
