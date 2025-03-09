@@ -1,34 +1,60 @@
-# Vercel DoH 转发部署说明
+# 🚀 Vercel DoH 转发部署说明 🚀
 
-## 1. Fork 仓库
+## 1️⃣ Fork 仓库（必做）
 
-1. 访问 [DoH 转发仓库](https://github.com/example/doh-forwarder)（请替换为实际仓库地址）。
-2. 点击右上角的 `Fork` 按钮，将仓库 Fork 到自己的 GitHub 账户。
-3. 进入 Fork 后的仓库，顺手点个 `Star` 以示支持。
+✅ **访问** [DoH 转发仓库](https://github.com/example/doh-forwarder)（请替换为实际仓库地址）。  
+✅ **点击** 右上角 `Fork` 按钮，将仓库 Fork 到自己的 GitHub 账户。  
+✅ **进入** Fork 后的仓库，顺手点个 ⭐ `Star` 以示支持！
 
-## 2. 部署到 Vercel
+---
 
-1. 进入 [Vercel 官网](https://vercel.com/) 并登录。
-2. 在 Vercel 仪表盘中，点击 `New Project`。
-3. 选择刚刚 Fork 的 DoH 仓库。
-4. 根据提示进行简单配置后，点击 `Deploy`。
+## 2️⃣ 部署到 Vercel（快速完成）
 
-### 可选：绑定自定义域
+✅ **进入** [Vercel 官网](https://vercel.com/) 并登录。  
+✅ **在** Vercel 仪表盘中，点击 `New Project`。  
+✅ **选择** 刚刚 Fork 的 DoH 仓库。  
+✅ **根据** 提示进行简单配置后，点击 `Deploy`。
 
-1. 在 Vercel 项目页面，进入 `Settings` > `Domains`。
-2. 添加自定义域名（如 `doh.example.com`）。
-3. 按照 Vercel 提示在你的 DNS 解析服务商处添加 CNAME 记录。
-4. 等待解析生效后，即可使用自定义域名访问。
+🔹 **可选：绑定自定义域**
+1. **进入** `Settings` > `Domains`。
+2. **添加** 自定义域名（如 `doh.example.com`）。
+3. **按照** Vercel 提示，在你的 DNS 解析服务商处添加 CNAME 记录。
+4. **等待** 解析生效后，即可使用自定义域名访问。
 
-## 3. 测试 DoH 服务
+---
+
+## 3️⃣ 测试 DoH 服务（确保可用）
 
 使用 curl 或浏览器测试 DoH 是否可用，例如：
 ```sh
 curl -X GET "https://doh.example.com/dns-query?name=example.com&type=A" -H "Accept: application/dns-json"
 ```
-如果返回正确的 JSON 解析结果，则说明部署成功！
+✅ 如果返回正确的 JSON 解析结果，则说明部署成功！ 🎉
 
-## 4. 结语
+---
 
-这样，你就成功在 Vercel 上部署了一个 DoH 转发服务。欢迎 Star & Fork 支持原项目！
+## ⚠ 4️⃣ 免责声明 ⚠
+
+❌ **该项目仅出于个人兴趣，与 Vercel 官方无关，未获得 Vercel 允许。**  
+❌ **如因使用该项目导致侵权或账户被封禁，本人概不负责。**
+
+---
+
+## 5️⃣ 常见公共 DoH 服务器（可替换）
+
+🔹 **你可以修改代码中的 DoH 服务器地址，以使用不同的提供商！**
+```txt
+Google DoH: https://dns.google/dns-query
+Cloudflare DoH: https://cloudflare-dns.com/dns-query
+Quad9 DoH: https://dns.quad9.net/dns-query
+AdGuard DoH: https://dns.adguard.com/dns-query
+NextDNS DoH: https://dns.nextdns.io/dns-query
+```  
+
+---
+
+## 🎯 6️⃣ 结语
+
+✅ 现在，你已成功在 Vercel 上部署了一个 DoH 转发服务！🚀  
+✅ 欢迎 **Star & Fork** 支持原项目！🎉
 
