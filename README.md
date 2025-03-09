@@ -2,7 +2,7 @@
 
 ## 1️⃣ Fork 仓库（必做）
 
-✅ **访问** [DoH 转发仓库](https://github.com/example/doh-forwarder)（请替换为实际仓库地址）。  
+✅ **访问** [DoH 转发仓库](https://github.com/laorent/Vercel-DoH-)（请替换为实际仓库地址）。  
 ✅ **点击** 右上角 `Fork` 按钮，将仓库 Fork 到自己的 GitHub 账户。  
 ✅ **进入** Fork 后的仓库，顺手点个 ⭐ `Star` 以示支持！
 
