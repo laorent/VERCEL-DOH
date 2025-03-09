@@ -43,7 +43,9 @@ curl -X GET "https://doh.example.com/dns-query?name=example.com&type=A" -H "Acce
 ## 5️⃣ 常见公共 DoH 服务器（可替换）
 
 🔹 **你可以修改代码中的 DoH 服务器地址，以使用不同的提供商！**
-      路径：api/dns-query.js
+
+路径：api/dns-query.js
+
 ```txt
 Google DoH: https://dns.google/dns-query
 Cloudflare DoH: https://cloudflare-dns.com/dns-query
